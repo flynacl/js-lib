@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Title</title>
+    <script src="../../localForage-1.7.2/dist/localforage.js"></script>
+    <link rel="stylesheet" href="Button.css">
+  </head>
+  <body>
+    <label class="ui-button ui-button-success" for="fileImg">上传图片</label>
+    <input type="button" class="ui-button ui-button-warning" value="删除图片" id="deleteImages">
+    <input type="file" id="fileImg" multiple accept="image/gif, image/jpeg, image/png" hidden>
+    <p id="result"></p>
+    <script>
+
+      // indexedDB 存储的图片
+      let storedImages = [];
+
+      // 读取 indexedDB 存储的图片，并渲染到页面
+      readFiles('images').then(value => {
+        storedImages = value;
+        renderImages(value);
+      });
+
+      // 页面新上传的图片
+      let toAddImages = [];
+
+      let reader = new FileReader();
+
+      let files = [];
+      let file;
+      let i = 0;
+      document.getElementById('fileImg').addEventListener('change', function (event) {
+        files = event.target.files;
+        writeFiles('images');
+      });
+      // 加载完成
+      reader.onload = function (event) {
+        let blob = new Blob([event.target.result]);
+        file = files[i];
+
+        if (storedImages.length) {
+          let added = false;
+          for (let j = 0; j < storedImages.length; j++) {
+            // 排除与已存储图片 文件名、大小、最近修改时间全部一致的待存储图片
+            if (file.name === storedImages[j].fileInfo.name
+              && file.size === storedImages[j].fileInfo.size
+              && file.lastModified === storedImages[j].fileInfo.lastModified) {
+              added = true;
+            }
+          }
+          if (!added) {
+            toAddImages.push({
+              value: blob,
+              fileInfo: {name: file.name, size: file.size, lastModified: file.lastModified}
+            });
+          }
+        } else {
+          toAddImages.push({
+            value: blob,
+            fileInfo: {name: file.name, size: file.size, lastModified: file.lastModified}
+          });
+        }
+
+        i++;
+        writeFiles('images');
+      };
+
+      document.getElementById('deleteImages').addEventListener('click', function (e) {
+        console.log('删除 indexedDB 内图片信息 ...');
+        localforage.removeItem('images');
+        console.log('删除完成.');
+        console.log('清空页面图片 ...');
+        let eleResult = document.getElementById('result');
+        eleResult.innerHTML = '';
+        console.log('清空完成.');
+      });
+
+      /**
+       * 将上传图片写入到 indexedDB
+       * @param key 存储键
+       */
+      function writeFiles(key) {
+        if (i < files.length) {
+          file = files[i];
+          // 选择的文件是图片
+          if (file.type.indexOf("image") === 0) {
+            reader.readAsArrayBuffer(file);
+          }
+        } else {
+          renderImages(toAddImages);
+          storedImages = storedImages.concat(toAddImages);
+          // blob 本地存储
+          console.log('开始将图片信息写入到 indexedDB ...');
+          localforage.setItem(key, storedImages);
+          console.log('写入完成.');
+          toAddImages = [];
+          i = 0;
+        }
+      }
+
+      /**
+       * 渲染图片
+       * @param images 待渲染图片数组，数据结构为对象{name: '文件名', value: Blob 对象}
+       */
+      function renderImages(images) {
+        if (!images.length) return;
+        console.log('开始渲染图片到页面 ...');
+        for (let j = 0; j < images.length; j++) {
+          let eleResult = document.getElementById('result');
+          // 图片资源
+          let eleImg = document.createElement('img');
+          eleImg.style.cssText = 'width: 100px';
+          // 创建一个 DOMString，其中包含一个表示参数中给出的对象的URL。
+          // 这个 URL 的生命周期和创建它的窗口中的 document 绑定。
+          // 这个新的URL 对象表示指定的 File 对象或 Blob 对象。
+          eleImg.src = URL.createObjectURL(images[j].value);
+          eleImg.title = images[j].fileInfo.name;
+          eleResult.appendChild(eleImg);
+          console.log('图片', images[j].fileInfo.name, '渲染完成.');
+        }
+        console.log('全部图片渲染完成.');
+      }
+
+      /**
+       * 从 indexedDB 中读取数据
+       * @param key 存储键
+       * @returns {Promise<any>}
+       */
+      function readFiles(key) {
+        return new Promise((resolve, reject) => {
+          console.log('loading', key, 'from indexedDB ...');
+          localforage.getItem(key)
+            .then(value => {
+              if (value) {
+                console.log('loading complete');
+                resolve(value);
+              } else {
+                console.log(key, 'not found');
+                resolve([]);
+              }
+            })
+            .catch(err => {
+              console.log(err);
+              console.log('error occurred');
+              reject(err);
+            });
+        })
+      }
+
+
+    </script>
+
+  </body>
+</html>
